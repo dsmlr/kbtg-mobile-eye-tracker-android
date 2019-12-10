@@ -2,6 +2,7 @@ package com.ria.demo
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
@@ -98,28 +99,72 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun drawCircles(circles: ArrayList<Circle>) {
+        // Array value for testing the image capturing
+        val imageArray = arrayListOf<Bitmap>()
+
         showCanvasView()
+
+        Log.d(tag, String.format("Start Calibration"))
 
         // Draw circle one by one
         circles.forEachIndexed { i, circle ->
             Handler().postDelayed({
                 Log.d(tag, String.format("Circle No.%s, X: %s, Y: %s", i, circle.x, circle.y))
+
+                // Take picture here
+                addImageFromFrontCamera(imageArray)
+
                 canvas_view.drawCircle(circle)
             }, (Constants.CIRCLE_LIFETIME_IN_MILLIS * i).toLong())
         }
 
-        // Use countdown timer to stop drawing
+        // Countdown timer to hide canvas view
         val recordDuration: Long = (circles.size * Constants.CIRCLE_LIFETIME_IN_MILLIS).toLong()
+        createFirstTimer(recordDuration)
+
+        // Countdown timer to wait an async task done and show main screen
+        createSecondTimer(recordDuration, imageArray)
+    }
+
+    private fun createFirstTimer(recordDuration: Long) {
         object : CountDownTimer(recordDuration, 1000) {
             override fun onTick(millisUntilFinished: Long) {
             }
 
             override fun onFinish() {
-                restoreMainScreen()
+                canvas_view.visibility = View.GONE
                 canvas_view.clearView()
-                makeToast("Calibrating is complete")
             }
         }.start()
+    }
+
+    private fun createSecondTimer(
+        recordDuration: Long,
+        imageArray: ArrayList<Bitmap>
+    ) {
+        object : CountDownTimer(recordDuration + 2000L, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+            }
+
+            override fun onFinish() {
+                makeToast("Calibrating is complete")
+                restoreMainScreen()
+
+                // Test logging value in image array
+                Log.d(tag, String.format("Finish Calibration"))
+                Log.d(tag, String.format("Image array size: %s", imageArray.size.toString()))
+                imageArray.clear()
+            }
+        }.start()
+    }
+
+    private fun addImageFromFrontCamera(imageArray: ArrayList<Bitmap>) {
+        fotoapparat!!.takePicture().toBitmap().whenAvailable { photo ->
+            if (photo != null) {
+                Log.d(tag, "Complete Captured Image")
+                imageArray.add(photo.bitmap)
+            }
+        }
     }
 
     private fun showCountdownTimerScreen() {
@@ -138,7 +183,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun restoreMainScreen() {
         camera_view.visibility = View.VISIBLE
-        canvas_view.visibility = View.GONE
         activity_main_btn_start_calibration.visibility = View.VISIBLE
         activity_main_countdown_timer.visibility = View.GONE
     }

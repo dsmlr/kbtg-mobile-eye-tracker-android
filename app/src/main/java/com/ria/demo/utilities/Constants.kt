@@ -7,6 +7,6 @@ class Constants {
         const val SCREEN_HEIGHT = 1440
         const val CIRCLE_RADIUS = 56
         const val COUNTDOWN_DURATION_IN_MILLIS: Long = 3000
-        const val CIRCLE_LIFETIME_IN_MILLIS = 2000
+        const val CIRCLE_LIFETIME_IN_MILLIS = 1000
     }
 }
