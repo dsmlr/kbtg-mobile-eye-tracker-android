@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">KBTG Android Demo</string>
+    <string name="start_calibration_btn">Start Calibration</string>
+    <string name="start_recording_btn">Start Recording</string>
+    <string name="stop_recording_btn">Stop Recording</string>
 </resources>

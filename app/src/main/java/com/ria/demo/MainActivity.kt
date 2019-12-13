@@ -1,8 +1,12 @@
 package com.ria.demo
 
 import android.Manifest
+import android.app.ActivityManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
@@ -12,6 +16,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.ria.demo.models.Circle
+import com.ria.demo.services.CameraRecordService
+import com.ria.demo.services.ScreenRecordService
 import com.ria.demo.utilities.Constants
 import com.ria.demo.utilities.makeToast
 import io.fotoapparat.Fotoapparat
@@ -23,31 +29,92 @@ import io.fotoapparat.selector.front
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlin.math.ceil
 
-class MainActivity : AppCompatActivity() {
+
+class MainActivity : AppCompatActivity(), View.OnClickListener {
     private val tag = "MainActivity"
+    private val permissionCode = 1
+    private val apiVersion = android.os.Build.VERSION.SDK_INT
     private var fotoapparat: Fotoapparat? = null
-    private val permissions = arrayOf(
-        Manifest.permission.CAMERA,
-        Manifest.permission.WRITE_EXTERNAL_STORAGE,
-        Manifest.permission.READ_EXTERNAL_STORAGE
-    )
+    private var mProjectionManager: MediaProjectionManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        requestForPermission()
         setContentView(R.layout.activity_main)
 
-        if (hasNoPermissions()) {
-            requestPermission()
-        }
+        mProjectionManager =
+            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
         createFotoapparat()
         addButtonEventListener()
+        notifyRecordingState()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode != permissionCode) {
+            Log.e(tag, "Unknown request code: $requestCode")
+
+            return
+        }
+
+        if (resultCode == RESULT_OK) {
+            Log.d(tag, "onActivityResult: Request code = $requestCode")
+            Log.d(tag, "onActivityResult: Result code = $resultCode")
+
+            startBackgroundScreenRecordService(resultCode, data)
+        } else {
+            makeToast("Screen Cast Permission Denied")
+
+            return
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        fotoapparat?.start()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        fotoapparat?.stop()
+    }
+
+    override fun onClick(view: View?) {
+        val cameraRecordService = Intent(this, CameraRecordService::class.java)
+
+        when (view?.id) {
+            R.id.activity_main_btn_start_recording -> {
+                startActivityForResult(
+                    mProjectionManager!!.createScreenCaptureIntent(),
+                    permissionCode
+                )
+                startService(cameraRecordService)
+
+                makeToast("Start recording")
+
+                notifyRecordingState()
+            }
+            R.id.activity_main_btn_stop_recording -> {
+                stopBackgroundScreenRecordService()
+                stopService(cameraRecordService)
+
+                makeToast("Stop recording")
+
+                notifyRecordingState()
+            }
+            R.id.activity_main_btn_start_calibration -> {
+                startCalibration()
+            }
+        }
     }
 
     private fun addButtonEventListener() {
-        activity_main_btn_start_calibration.setOnClickListener {
-            startCalibration()
-        }
+        activity_main_btn_start_recording.setOnClickListener(this)
+        activity_main_btn_stop_recording.setOnClickListener(this)
+        activity_main_btn_start_calibration.setOnClickListener(this)
     }
 
     private fun startCalibration() {
@@ -65,7 +132,6 @@ class MainActivity : AppCompatActivity() {
             }
         }.start()
     }
-
 
     private fun generateCircles(): ArrayList<Circle> {
         val circles = ArrayList<Circle>()
@@ -111,10 +177,10 @@ class MainActivity : AppCompatActivity() {
             Handler().postDelayed({
                 Log.d(tag, String.format("Circle No.%s, X: %s, Y: %s", i, circle.x, circle.y))
 
+                activity_main_canvas_view.drawCircle(circle)
+
                 // Take picture here
                 addImageFromFrontCamera(imageArray)
-
-                canvas_view.drawCircle(circle)
             }, (Constants.CIRCLE_LIFETIME_IN_MILLIS * i).toLong())
         }
 
@@ -132,8 +198,8 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onFinish() {
-                canvas_view.visibility = View.GONE
-                canvas_view.clearView()
+                activity_main_canvas_view.visibility = View.GONE
+                activity_main_canvas_view.clearView()
             }
         }.start()
     }
@@ -159,38 +225,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addImageFromFrontCamera(imageArray: ArrayList<Bitmap>) {
-        fotoapparat!!.takePicture().toBitmap().whenAvailable { photo ->
-            if (photo != null) {
-                Log.d(tag, "Complete Captured Image")
-                imageArray.add(photo.bitmap)
+        Handler().postDelayed({
+            Log.d(tag, "Captured Image")
+            fotoapparat!!.takePicture().toBitmap().whenAvailable { photo ->
+                if (photo != null) {
+                    imageArray.add(photo.bitmap)
+                }
             }
-        }
+        }, Constants.CIRCLE_LIFETIME_IN_MILLIS.toLong())
     }
 
     private fun showCountdownTimerScreen() {
-        camera_view.visibility = View.GONE
-        canvas_view.visibility = View.GONE
+        activity_main_camera_view.visibility = View.GONE
+        activity_main_canvas_view.visibility = View.GONE
         activity_main_btn_start_calibration.visibility = View.GONE
+        activity_main_btn_start_recording.visibility = View.GONE
+        activity_main_btn_stop_recording.visibility = View.GONE
         activity_main_countdown_timer.visibility = View.VISIBLE
     }
 
     private fun showCanvasView() {
-        camera_view.visibility = View.GONE
-        canvas_view.visibility = View.VISIBLE
+        activity_main_camera_view.visibility = View.GONE
+        activity_main_canvas_view.visibility = View.VISIBLE
         activity_main_btn_start_calibration.visibility = View.GONE
+        activity_main_btn_start_recording.visibility = View.GONE
+        activity_main_btn_stop_recording.visibility = View.GONE
         activity_main_countdown_timer.visibility = View.GONE
     }
 
     private fun restoreMainScreen() {
-        camera_view.visibility = View.VISIBLE
+        activity_main_camera_view.visibility = View.VISIBLE
         activity_main_btn_start_calibration.visibility = View.VISIBLE
+        activity_main_btn_start_recording.visibility = View.VISIBLE
+        activity_main_btn_stop_recording.visibility = View.GONE
         activity_main_countdown_timer.visibility = View.GONE
     }
 
     private fun createFotoapparat() {
         fotoapparat = Fotoapparat(
             context = this,
-            view = camera_view,
+            view = activity_main_camera_view,
             scaleType = ScaleType.CenterCrop,
             lensPosition = front(),
             logger = loggers(
@@ -201,30 +275,84 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun hasNoPermissions(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        ) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
-            this,
+    private fun requestForPermission() {
+        val permissions = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.SYSTEM_ALERT_WINDOW,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
-        ) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.CAMERA
-        ) != PackageManager.PERMISSION_GRANTED
+        )
+        val granted = PackageManager.PERMISSION_GRANTED
+
+        if (apiVersion >= android.os.Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != granted
+                || ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.SYSTEM_ALERT_WINDOW
+                ) != granted
+                || ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.RECORD_AUDIO
+                ) != granted
+                || ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                ) != granted
+                || ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                ) != granted
+            ) {
+                ActivityCompat.requestPermissions(this, permissions, 2)
+            }
+        }
     }
 
-    fun requestPermission() {
-        ActivityCompat.requestPermissions(this, permissions, 0)
+    private fun notifyRecordingState() {
+        if (isServiceRunning()) {
+            activity_main_camera_view.visibility = View.GONE
+            activity_main_is_record.visibility = View.VISIBLE
+            activity_main_btn_start_recording.visibility = View.GONE
+            activity_main_btn_stop_recording.visibility = View.VISIBLE
+            activity_main_btn_start_calibration.isEnabled = false
+        } else {
+            activity_main_camera_view.visibility = View.VISIBLE
+            activity_main_is_record.visibility = View.GONE
+            activity_main_btn_start_recording.visibility = View.VISIBLE
+            activity_main_btn_stop_recording.visibility = View.GONE
+            activity_main_btn_start_calibration.isEnabled = true
+        }
     }
 
-    override fun onStart() {
-        super.onStart()
-        fotoapparat?.start()
+    private fun startBackgroundScreenRecordService(resultCode: Int, data: Intent?) {
+//        val intent = RecordService.newIntent(this, resultCode, data)
+        val intent = ScreenRecordService.newIntent(this, resultCode, data)
+
+        startService(intent)
     }
 
-    override fun onStop() {
-        super.onStop()
-        fotoapparat?.stop()
+    private fun stopBackgroundScreenRecordService() {
+//        val intent = Intent(this, RecordService::class.java)
+        val intent = Intent(this, ScreenRecordService::class.java)
+
+        stopService(intent)
+    }
+
+    private fun isServiceRunning(): Boolean {
+        val manager =
+            getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+
+        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+            val serviceName = service.service.className
+
+            if (serviceName == CameraRecordService::class.java.name
+                || serviceName == ScreenRecordService::class.java.name
+            ) {
+                return true
+            }
+        }
+
+        return false
     }
 }

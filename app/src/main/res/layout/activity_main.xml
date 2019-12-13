@@ -8,12 +8,12 @@
     tools:context="com.ria.demo.MainActivity">
 
     <io.fotoapparat.view.CameraView
-        android:id="@+id/camera_view"
+        android:id="@+id/activity_main_camera_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
     <com.ria.demo.views.CanvasView
-        android:id="@+id/canvas_view"
+        android:id="@+id/activity_main_canvas_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
@@ -39,12 +39,42 @@
             android:textSize="64sp"
             android:visibility="gone" />
 
-        <Button
-            android:id="@+id/activity_main_btn_start_calibration"
-            android:layout_width="fill_parent"
+        <TextView
+            android:id="@+id/activity_main_is_record"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:layout_centerInParent="true"
-            android:text="Start Calibration" />
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:text="Currently recording video"
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:visibility="gone" />
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <Button
+                android:id="@+id/activity_main_btn_start_calibration"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/start_calibration_btn"
+                app:layout_constraintBottom_toBottomOf="parent" />
+
+            <Button
+                android:id="@+id/activity_main_btn_start_recording"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/start_recording_btn"
+                app:layout_constraintBottom_toTopOf="@id/activity_main_btn_start_calibration" />
+
+            <Button
+                android:id="@+id/activity_main_btn_stop_recording"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/stop_recording_btn"
+                android:visibility="gone"
+                app:layout_constraintBottom_toTopOf="@id/activity_main_btn_start_calibration" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
     </RelativeLayout>
 </FrameLayout>
