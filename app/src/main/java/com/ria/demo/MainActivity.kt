@@ -6,19 +6,26 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Bitmap.CompressFormat
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
+import android.text.format.DateFormat
 import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.androidnetworking.AndroidNetworking
+import com.androidnetworking.common.Priority
+import com.androidnetworking.error.ANError
+import com.androidnetworking.interfaces.JSONObjectRequestListener
 import com.ria.demo.models.Circle
 import com.ria.demo.services.CameraRecordService
 import com.ria.demo.services.ScreenRecordService
 import com.ria.demo.utilities.Constants
+import com.ria.demo.utilities.Constants.Companion.SERVER_URL
 import com.ria.demo.utilities.makeToast
 import io.fotoapparat.Fotoapparat
 import io.fotoapparat.log.fileLogger
@@ -27,6 +34,12 @@ import io.fotoapparat.log.loggers
 import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.selector.front
 import kotlinx.android.synthetic.main.activity_main.*
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.util.*
+import kotlin.collections.ArrayList
 import kotlin.math.ceil
 
 
@@ -46,6 +59,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         mProjectionManager =
             getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
+        AndroidNetworking.initialize(applicationContext);
         createFotoapparat()
         addButtonEventListener()
         notifyRecordingState()
@@ -166,7 +180,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun drawCircles(circles: ArrayList<Circle>) {
         // Array value for testing the image capturing
-        val imageArray = arrayListOf<Bitmap>()
+        val imageArray = arrayListOf<File>()
 
         showCanvasView()
 
@@ -206,13 +220,14 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun createSecondTimer(
         recordDuration: Long,
-        imageArray: ArrayList<Bitmap>
+        imageArray: ArrayList<File>
     ) {
         object : CountDownTimer(recordDuration + 2000L, 1000) {
             override fun onTick(millisUntilFinished: Long) {
             }
 
             override fun onFinish() {
+                uploadImagesToCalibrate(imageArray)
                 makeToast("Calibrating is complete")
                 restoreMainScreen()
 
@@ -224,15 +239,37 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }.start()
     }
 
-    private fun addImageFromFrontCamera(imageArray: ArrayList<Bitmap>) {
+    private fun addImageFromFrontCamera(imageArray: ArrayList<File>) {
+        val outputDir = applicationContext.cacheDir
+        val outputFile = File.createTempFile("prefix", "extension", outputDir)
+
+        Log.d(tag, "Captured Image")
+
         Handler().postDelayed({
-            Log.d(tag, "Captured Image")
-            fotoapparat!!.takePicture().toBitmap().whenAvailable { photo ->
-                if (photo != null) {
-                    imageArray.add(photo.bitmap)
-                }
+            fotoapparat!!.takePicture().saveToFile(outputFile).whenAvailable {
+                imageArray.add(outputFile)
             }
         }, Constants.CIRCLE_LIFETIME_IN_MILLIS.toLong())
+    }
+
+    private fun createImageFile(bitmap: Bitmap): File {
+        val filename = DateFormat.format("yyyy-MM-dd_kk-mm-ss", Date().time).toString()
+        val file = File(applicationContext.cacheDir, filename)
+
+        file.createNewFile()
+
+        val bos = ByteArrayOutputStream()
+
+        bitmap.compress(CompressFormat.PNG, 0 /*ignored for PNG*/, bos)
+
+        val bitmapData: ByteArray = bos.toByteArray()
+        val fos = FileOutputStream(file)
+
+        fos.write(bitmapData)
+        fos.flush()
+        fos.close()
+
+        return file
     }
 
     private fun showCountdownTimerScreen() {
@@ -277,6 +314,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun requestForPermission() {
         val permissions = arrayOf(
+            Manifest.permission.INTERNET,
             Manifest.permission.CAMERA,
             Manifest.permission.SYSTEM_ALERT_WINDOW,
             Manifest.permission.RECORD_AUDIO,
@@ -286,7 +324,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         val granted = PackageManager.PERMISSION_GRANTED
 
         if (apiVersion >= android.os.Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != granted
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.INTERNET
+                ) != granted || ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.CAMERA
+                ) != granted
                 || ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.SYSTEM_ALERT_WINDOW
@@ -326,14 +370,12 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun startBackgroundScreenRecordService(resultCode: Int, data: Intent?) {
-//        val intent = RecordService.newIntent(this, resultCode, data)
         val intent = ScreenRecordService.newIntent(this, resultCode, data)
 
         startService(intent)
     }
 
     private fun stopBackgroundScreenRecordService() {
-//        val intent = Intent(this, RecordService::class.java)
         val intent = Intent(this, ScreenRecordService::class.java)
 
         stopService(intent)
@@ -354,5 +396,30 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
 
         return false
+    }
+
+    private fun uploadImagesToCalibrate(
+        imgList: ArrayList<File>
+    ) {
+        AndroidNetworking.upload("$SERVER_URL/calibrate")
+            .addMultipartFileList("image[]", imgList)
+            .addMultipartParameter("key", "value")
+            .setPriority(Priority.HIGH)
+            .build()
+            .setUploadProgressListener { bytesUploaded, totalBytes ->
+                Log.d(
+                    tag,
+                    String.format("BytesUploaded: %s / %s", bytesUploaded, totalBytes)
+                )
+            }
+            .getAsJSONObject(object : JSONObjectRequestListener {
+                override fun onResponse(response: JSONObject?) {
+                    Log.d(tag, response.toString())
+                }
+
+                override fun onError(anError: ANError?) {
+                    Log.d(tag, anError.toString())
+                }
+            })
     }
 }
