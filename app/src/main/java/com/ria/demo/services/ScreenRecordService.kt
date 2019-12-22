@@ -20,7 +20,6 @@ import android.view.Surface
 import android.view.WindowManager
 import com.ria.demo.R
 import com.ria.demo.utilities.Uploader
-import com.ria.demo.utilities.makeToast
 import java.io.File
 import java.util.*
 
