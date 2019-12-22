@@ -5,41 +5,32 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Bitmap.CompressFormat
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
-import android.text.format.DateFormat
 import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.androidnetworking.AndroidNetworking
-import com.androidnetworking.common.Priority
-import com.androidnetworking.error.ANError
-import com.androidnetworking.interfaces.JSONObjectRequestListener
 import com.ria.demo.models.Circle
 import com.ria.demo.services.CameraRecordService
 import com.ria.demo.services.ScreenRecordService
 import com.ria.demo.utilities.Constants
-import com.ria.demo.utilities.Constants.Companion.SERVER_URL
+import com.ria.demo.utilities.Uploader
 import com.ria.demo.utilities.makeToast
 import io.fotoapparat.Fotoapparat
+import io.fotoapparat.configuration.CameraConfiguration
 import io.fotoapparat.log.fileLogger
 import io.fotoapparat.log.logcat
 import io.fotoapparat.log.loggers
+import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.parameter.ScaleType
-import io.fotoapparat.selector.front
+import io.fotoapparat.selector.*
 import kotlinx.android.synthetic.main.activity_main.*
-import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
-import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.math.ceil
 
 
@@ -88,7 +79,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     override fun onStart() {
         super.onStart()
-        fotoapparat?.start()
+
+        if (!isServiceRunning()) {
+            fotoapparat?.start()
+        }
     }
 
     override fun onStop() {
@@ -218,16 +212,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }.start()
     }
 
-    private fun createSecondTimer(
-        recordDuration: Long,
-        imageArray: ArrayList<File>
-    ) {
+    private fun createSecondTimer(recordDuration: Long, imageArray: ArrayList<File>) {
         object : CountDownTimer(recordDuration + 2000L, 1000) {
             override fun onTick(millisUntilFinished: Long) {
             }
 
             override fun onFinish() {
-                uploadImagesToCalibrate(imageArray)
+                Uploader.uploadImagesToCalibrate(imageArray)
                 makeToast("Calibrating is complete")
                 restoreMainScreen()
 
@@ -241,7 +232,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun addImageFromFrontCamera(imageArray: ArrayList<File>) {
         val outputDir = applicationContext.cacheDir
-        val outputFile = File.createTempFile("prefix", "extension", outputDir)
+        val outputFile = File.createTempFile("calibrate_", "_temp", outputDir)
 
         Log.d(tag, "Captured Image")
 
@@ -250,26 +241,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 imageArray.add(outputFile)
             }
         }, Constants.CIRCLE_LIFETIME_IN_MILLIS.toLong())
-    }
-
-    private fun createImageFile(bitmap: Bitmap): File {
-        val filename = DateFormat.format("yyyy-MM-dd_kk-mm-ss", Date().time).toString()
-        val file = File(applicationContext.cacheDir, filename)
-
-        file.createNewFile()
-
-        val bos = ByteArrayOutputStream()
-
-        bitmap.compress(CompressFormat.PNG, 0 /*ignored for PNG*/, bos)
-
-        val bitmapData: ByteArray = bos.toByteArray()
-        val fos = FileOutputStream(file)
-
-        fos.write(bitmapData)
-        fos.flush()
-        fos.close()
-
-        return file
     }
 
     private fun showCountdownTimerScreen() {
@@ -299,11 +270,41 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun createFotoapparat() {
+        val cameraConfiguration = CameraConfiguration(
+            pictureResolution = firstAvailable(
+                { Resolution(1280, 720) },
+                highestResolution()
+            ),
+            previewResolution = highestResolution(),
+            previewFpsRange = highestFps(),
+            focusMode = firstAvailable(
+                continuousFocusPicture(),
+                autoFocus(),
+                fixed()
+            ),
+            flashMode = firstAvailable(
+                autoRedEye(),
+                autoFlash(),
+                torch(),
+                off()
+            ),
+            antiBandingMode = firstAvailable(
+                auto(),
+                hz50(),
+                hz60(),
+                none()
+            ),
+            jpegQuality = manualJpegQuality(90),
+            sensorSensitivity = lowestSensorSensitivity(),
+            frameProcessor = { frame -> }
+        )
+
         fotoapparat = Fotoapparat(
             context = this,
             view = activity_main_camera_view,
             scaleType = ScaleType.CenterCrop,
             lensPosition = front(),
+            cameraConfiguration = cameraConfiguration,
             logger = loggers(
                 logcat(),
                 fileLogger(this)
@@ -355,12 +356,16 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun notifyRecordingState() {
         if (isServiceRunning()) {
+            fotoapparat?.stop()
+
             activity_main_camera_view.visibility = View.GONE
             activity_main_is_record.visibility = View.VISIBLE
             activity_main_btn_start_recording.visibility = View.GONE
             activity_main_btn_stop_recording.visibility = View.VISIBLE
             activity_main_btn_start_calibration.isEnabled = false
         } else {
+            fotoapparat?.start()
+
             activity_main_camera_view.visibility = View.VISIBLE
             activity_main_is_record.visibility = View.GONE
             activity_main_btn_start_recording.visibility = View.VISIBLE
@@ -396,30 +401,5 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
 
         return false
-    }
-
-    private fun uploadImagesToCalibrate(
-        imgList: ArrayList<File>
-    ) {
-        AndroidNetworking.upload("$SERVER_URL/calibrate")
-            .addMultipartFileList("image[]", imgList)
-            .addMultipartParameter("key", "value")
-            .setPriority(Priority.HIGH)
-            .build()
-            .setUploadProgressListener { bytesUploaded, totalBytes ->
-                Log.d(
-                    tag,
-                    String.format("BytesUploaded: %s / %s", bytesUploaded, totalBytes)
-                )
-            }
-            .getAsJSONObject(object : JSONObjectRequestListener {
-                override fun onResponse(response: JSONObject?) {
-                    Log.d(tag, response.toString())
-                }
-
-                override fun onError(anError: ANError?) {
-                    Log.d(tag, anError.toString())
-                }
-            })
     }
 }

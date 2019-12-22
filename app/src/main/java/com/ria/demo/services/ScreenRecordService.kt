@@ -19,6 +19,7 @@ import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
 import com.ria.demo.R
+import com.ria.demo.utilities.Uploader
 import com.ria.demo.utilities.makeToast
 import java.io.File
 import java.util.*
@@ -37,6 +38,7 @@ class ScreenRecordService : Service() {
     private var resultCode = 0
     private var data: Intent? = null
     private var mScreenStateReceiver: BroadcastReceiver? = null
+    private lateinit var file: File
 
     companion object BackgroundScreenRecordService {
         private const val EXTRA_RESULT_CODE = "resultcode"
@@ -149,41 +151,6 @@ class ScreenRecordService : Service() {
         return START_REDELIVER_INTENT
     }
 
-    private fun createNotification(pendingIntent: PendingIntent): Notification {
-        Log.d(tag, "here")
-
-        val notification: Notification
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = "channel_id_2"
-            val channel = NotificationChannel(
-                channelId,
-                "channel_name_2",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
-                channel
-            )
-            notification = Notification.Builder(this, channelId)
-                .setContentTitle("KBTG Android Demo")
-                .setContentText("Your screen is being recorded and saved to your phone.")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentIntent(pendingIntent)
-                .setTicker("Tickertext")
-                .build()
-        } else {
-            notification = Notification.Builder(this)
-                .setContentTitle("KBTG Android Demo")
-                .setContentText("Your screen is being recorded and saved to your phone.")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentIntent(pendingIntent)
-                .setTicker("Tickertext")
-                .build()
-        }
-
-        return notification
-    }
-
     private fun startRecording(resultCode: Int, data: Intent?) {
         Log.d(tag, "Screen Record Activate")
 
@@ -205,8 +172,8 @@ class ScreenRecordService : Service() {
         mMediaRecorder!!.setVideoFrameRate(15)
         mMediaRecorder!!.setVideoSize(displayWidth, displayHeight)
 
-        val path = openFileForStorage()!!.absolutePath
-        mMediaRecorder!!.setOutputFile(path)
+        file = openFileForStorage()!!
+        mMediaRecorder!!.setOutputFile(file.absolutePath)
 
         try {
             mMediaRecorder!!.prepare()
@@ -264,8 +231,8 @@ class ScreenRecordService : Service() {
 
     override fun onDestroy() {
         stopRecording()
+        Uploader.uploadVideosToPredict(arrayListOf(file))
         unregisterReceiver(mScreenStateReceiver)
         stopSelf()
-        makeToast("BackgroundScreenRecordService has stopped")
     }
 }

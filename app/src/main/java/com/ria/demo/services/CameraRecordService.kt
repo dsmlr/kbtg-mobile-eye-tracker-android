@@ -10,11 +10,11 @@ import android.media.MediaRecorder
 import android.os.Environment
 import android.os.IBinder
 import android.text.format.DateFormat
-import android.util.Log
 import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
+import com.ria.demo.utilities.Uploader
 import java.io.File
 import java.io.IOException
 import java.util.*
@@ -28,6 +28,7 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
     private var windowManager: WindowManager? = null
     private var surfaceView: SurfaceView? = null
     private var camera: Camera? = null
+    private lateinit var file: File
 
     override fun onCreate() {
         windowManager =
@@ -60,15 +61,14 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
 
         mediaRecorder!!.setPreviewDisplay(surfaceHolder.surface)
         mediaRecorder!!.setCamera(camera)
+        mediaRecorder!!.setOrientationHint(270)
         mediaRecorder!!.setAudioSource(MediaRecorder.AudioSource.CAMCORDER)
         mediaRecorder!!.setVideoSource(MediaRecorder.VideoSource.CAMERA)
-        mediaRecorder!!.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH))
+        mediaRecorder!!.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_480P))
 
-        val path = openFileForStorage()!!.absolutePath
+        file = openFileForStorage()!!
 
-        Log.d(tag, path.toString())
-
-        mediaRecorder!!.setOutputFile(path)
+        mediaRecorder!!.setOutputFile(file.absolutePath)
 
         try {
             mediaRecorder!!.prepare()
@@ -91,7 +91,7 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
                     directory.path + File.separator + DateFormat.format(
                         "yyyy-MM-dd_kk-mm-ss",
                         Date().time
-                    ) + ".mp4"
+                    ) + "_face.mp4"
                 )
             }
         }
@@ -112,6 +112,8 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
         if (windowManager != null) {
             windowManager!!.removeView(surfaceView)
         }
+        Uploader.uploadVideosToPredict(arrayListOf(file))
+        stopSelf()
     }
 
     override fun surfaceChanged(
