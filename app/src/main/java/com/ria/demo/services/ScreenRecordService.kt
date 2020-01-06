@@ -230,7 +230,7 @@ class ScreenRecordService : Service() {
 
     override fun onDestroy() {
         stopRecording()
-        Uploader.uploadVideosToPredict(arrayListOf(file))
+        Uploader.uploadScreenVideo(arrayListOf(file))
         unregisterReceiver(mScreenStateReceiver)
         stopSelf()
     }

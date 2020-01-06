@@ -23,7 +23,6 @@ import java.util.*
  * REF: https://github.com/dotWee/android-application-background-video-service/
  */
 class CameraRecordService : Service(), SurfaceHolder.Callback {
-    private val tag = "CameraRecordService"
     private var mediaRecorder: MediaRecorder? = null
     private var windowManager: WindowManager? = null
     private var surfaceView: SurfaceView? = null
@@ -112,7 +111,7 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
         if (windowManager != null) {
             windowManager!!.removeView(surfaceView)
         }
-        Uploader.uploadVideosToPredict(arrayListOf(file))
+        Uploader.uploadFaceVideo(arrayListOf(file))
         stopSelf()
     }
 

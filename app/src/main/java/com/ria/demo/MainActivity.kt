@@ -187,7 +187,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
                 activity_main_canvas_view.drawCircle(circle)
 
-                // Take picture here
                 addImageFromFrontCamera(imageArray)
             }, (Constants.CIRCLE_LIFETIME_IN_MILLIS * i).toLong())
         }
@@ -197,7 +196,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         createFirstTimer(recordDuration)
 
         // Countdown timer to wait an async task done and show main screen
-        createSecondTimer(recordDuration, imageArray)
+        createSecondTimer(recordDuration, imageArray, circles)
     }
 
     private fun createFirstTimer(recordDuration: Long) {
@@ -212,13 +211,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }.start()
     }
 
-    private fun createSecondTimer(recordDuration: Long, imageArray: ArrayList<File>) {
+    private fun createSecondTimer(recordDuration: Long, imageArray: ArrayList<File>, circles: ArrayList<Circle>) {
         object : CountDownTimer(recordDuration + 2000L, 1000) {
             override fun onTick(millisUntilFinished: Long) {
             }
 
             override fun onFinish() {
-                Uploader.uploadImagesToCalibrate(imageArray)
+                Uploader.uploadImagesToCalibrate(imageArray, circles)
                 makeToast("Calibrating is complete")
                 restoreMainScreen()
 
@@ -282,12 +281,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 autoFocus(),
                 fixed()
             ),
-            flashMode = firstAvailable(
-                autoRedEye(),
-                autoFlash(),
-                torch(),
-                off()
-            ),
+            flashMode = off(),
             antiBandingMode = firstAvailable(
                 auto(),
                 hz50(),
