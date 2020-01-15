@@ -28,6 +28,13 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
     private var surfaceView: SurfaceView? = null
     private var camera: Camera? = null
     private lateinit var file: File
+    private lateinit var recordType: String
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        recordType = intent!!.getStringExtra("recordType")
+
+        return super.onStartCommand(intent, flags, startId)
+    }
 
     override fun onCreate() {
         windowManager =
@@ -111,7 +118,9 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
         if (windowManager != null) {
             windowManager!!.removeView(surfaceView)
         }
-        Uploader.uploadFaceVideo(arrayListOf(file))
+
+        Uploader.uploadFaceVideo(recordType, arrayListOf(file))
+
         stopSelf()
     }
 

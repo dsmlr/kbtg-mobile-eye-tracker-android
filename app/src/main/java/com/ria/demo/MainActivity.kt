@@ -19,7 +19,7 @@ import com.ria.demo.models.Circle
 import com.ria.demo.services.CameraRecordService
 import com.ria.demo.services.ScreenRecordService
 import com.ria.demo.utilities.Constants
-import com.ria.demo.utilities.Uploader
+import com.ria.demo.utilities.Constants.Companion.RECORD_TYPE
 import com.ria.demo.utilities.makeToast
 import io.fotoapparat.Fotoapparat
 import io.fotoapparat.configuration.CameraConfiguration
@@ -30,11 +30,13 @@ import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.selector.*
 import kotlinx.android.synthetic.main.activity_main.*
-import java.io.File
-import kotlin.math.ceil
 
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
+    companion object {
+        var circles = ArrayList<Circle>()
+    }
+
     private val tag = "MainActivity"
     private val permissionCode = 1
     private val apiVersion = android.os.Build.VERSION.SDK_INT
@@ -50,7 +52,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         mProjectionManager =
             getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
-        AndroidNetworking.initialize(applicationContext);
+        AndroidNetworking.initialize(applicationContext)
         createFotoapparat()
         addButtonEventListener()
         notifyRecordingState()
@@ -91,10 +93,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     override fun onClick(view: View?) {
-        val cameraRecordService = Intent(this, CameraRecordService::class.java)
-
         when (view?.id) {
             R.id.activity_main_btn_start_recording -> {
+                val cameraRecordService = Intent(this, CameraRecordService::class.java)
+                cameraRecordService.putExtra(RECORD_TYPE, "prediction")
+
                 startActivityForResult(
                     mProjectionManager!!.createScreenCaptureIntent(),
                     permissionCode
@@ -106,6 +109,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 notifyRecordingState()
             }
             R.id.activity_main_btn_stop_recording -> {
+                val cameraRecordService = Intent(this, CameraRecordService::class.java)
+
                 stopBackgroundScreenRecordService()
                 stopService(cameraRecordService)
 
@@ -114,6 +119,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 notifyRecordingState()
             }
             R.id.activity_main_btn_start_calibration -> {
+                val cameraRecordService = Intent(this, CameraRecordService::class.java)
+                cameraRecordService.putExtra(RECORD_TYPE, "calibration")
+                Log.d(tag, "Before start service timestamp: ${System.currentTimeMillis()}")
+                startService(cameraRecordService)
+                Log.d(tag, "After start service timestamp: ${System.currentTimeMillis()}")
                 startCalibration()
             }
         }
@@ -127,26 +137,23 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun startCalibration() {
         showCountdownTimerScreen()
+        activity_main_countdown_timer.text = "Ready"
 
         object : CountDownTimer(Constants.COUNTDOWN_DURATION_IN_MILLIS, 1000) {
             override fun onTick(millisUntilFinished: Long) {
-                val second = ceil(((millisUntilFinished + 1000) / 1000).toDouble()).toInt()
-                activity_main_countdown_timer.text = second.toString()
             }
 
             override fun onFinish() {
                 activity_main_countdown_timer.text = ""
-                drawCircles(generateCircles())
+                generateCircles()
+                drawCircles()
             }
         }.start()
     }
 
-    private fun generateCircles(): ArrayList<Circle> {
-        val circles = ArrayList<Circle>()
-
+    private fun generateCircles() {
+        circles.clear()
         circles.addAll(createFixedCircles())
-
-        return circles
     }
 
     private fun createFixedCircles(): ArrayList<Circle> {
@@ -172,10 +179,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         return fixedCircles
     }
 
-    private fun drawCircles(circles: ArrayList<Circle>) {
-        // Array value for testing the image capturing
-        val imageArray = arrayListOf<File>()
-
+    private fun drawCircles() {
         showCanvasView()
 
         Log.d(tag, String.format("Start Calibration"))
@@ -183,11 +187,18 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         // Draw circle one by one
         circles.forEachIndexed { i, circle ->
             Handler().postDelayed({
-                Log.d(tag, String.format("Circle No.%s, X: %s, Y: %s", i, circle.x, circle.y))
+                Log.d(
+                    tag,
+                    String.format(
+                        "Circle No.%s, Timestamp: %s, X: %s, Y: %s",
+                        i + 1,
+                        System.currentTimeMillis(),
+                        circle.x,
+                        circle.y
+                    )
+                )
 
                 activity_main_canvas_view.drawCircle(circle)
-
-                addImageFromFrontCamera(imageArray)
             }, (Constants.CIRCLE_LIFETIME_IN_MILLIS * i).toLong())
         }
 
@@ -196,7 +207,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         createFirstTimer(recordDuration)
 
         // Countdown timer to wait an async task done and show main screen
-        createSecondTimer(recordDuration, imageArray, circles)
+        createSecondTimer(recordDuration)
     }
 
     private fun createFirstTimer(recordDuration: Long) {
@@ -211,35 +222,23 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }.start()
     }
 
-    private fun createSecondTimer(recordDuration: Long, imageArray: ArrayList<File>, circles: ArrayList<Circle>) {
+    private fun createSecondTimer(recordDuration: Long) {
+        val cameraRecordService = Intent(this, CameraRecordService::class.java)
+
         object : CountDownTimer(recordDuration + 2000L, 1000) {
             override fun onTick(millisUntilFinished: Long) {
             }
 
             override fun onFinish() {
-                Uploader.uploadImagesToCalibrate(imageArray, circles)
-                makeToast("Calibrating is complete")
+                Log.d(tag, "Before stop service timestamp: ${System.currentTimeMillis()}")
+                stopService(cameraRecordService)
+                Log.d(tag, "After stop service timestamp: ${System.currentTimeMillis()}")
                 restoreMainScreen()
 
-                // Test logging value in image array
+                makeToast("Calibrating is complete")
                 Log.d(tag, String.format("Finish Calibration"))
-                Log.d(tag, String.format("Image array size: %s", imageArray.size.toString()))
-                imageArray.clear()
             }
         }.start()
-    }
-
-    private fun addImageFromFrontCamera(imageArray: ArrayList<File>) {
-        val outputDir = applicationContext.cacheDir
-        val outputFile = File.createTempFile("calibrate_", "_temp", outputDir)
-
-        Log.d(tag, "Captured Image")
-
-        Handler().postDelayed({
-            fotoapparat!!.takePicture().saveToFile(outputFile).whenAvailable {
-                imageArray.add(outputFile)
-            }
-        }, Constants.CIRCLE_LIFETIME_IN_MILLIS.toLong())
     }
 
     private fun showCountdownTimerScreen() {
