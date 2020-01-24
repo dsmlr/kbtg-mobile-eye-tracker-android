@@ -234,9 +234,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             }
 
             override fun onFinish() {
-                Log.d(tag, "Before stop service timestamp: ${System.currentTimeMillis()}")
                 stopService(cameraRecordService)
-                Log.d(tag, "After stop service timestamp: ${System.currentTimeMillis()}")
+                restartFotoapparat()
                 restoreMainScreen()
 
                 makeToast("Calibrating is complete")
@@ -398,5 +397,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
 
         return false
+    }
+
+    private fun restartFotoapparat() {
+        fotoapparat?.stop()
+        fotoapparat?.start()
     }
 }

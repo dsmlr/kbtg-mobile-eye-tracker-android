@@ -107,16 +107,8 @@ class NotificationHelper constructor(context: Context) : ContextWrapper(context)
         return builder
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.O)
-    fun deleteChannel(channelId: String) = apply {
-        notificationManager.deleteNotificationChannel(channelId)
-    }
-
     fun makeNotification(builder: Notification.Builder, notificationId: Int) = apply {
         notificationManager.notify(notificationId, builder.build())
     }
 
-    fun cancelNotification(notificationId: Int) = apply {
-        notificationManager.cancel(notificationId)
-    }
 }
