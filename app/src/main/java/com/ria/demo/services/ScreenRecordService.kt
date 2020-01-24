@@ -19,6 +19,7 @@ import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
 import com.ria.demo.R
+import com.ria.demo.utilities.Constants.Companion.APP_NAME
 import com.ria.demo.utilities.Uploader
 import java.io.File
 import java.util.*
@@ -37,6 +38,7 @@ class ScreenRecordService : Service() {
     private var resultCode = 0
     private var data: Intent? = null
     private var mScreenStateReceiver: BroadcastReceiver? = null
+    private lateinit var uploader: Uploader
     private lateinit var file: File
 
     companion object BackgroundScreenRecordService {
@@ -84,6 +86,8 @@ class ScreenRecordService : Service() {
     override fun onCreate() {
         Log.d(tag, "onCreate")
 
+        uploader = Uploader(this)
+
         val notificationIntent = Intent(this, ScreenRecordService::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0)
 
@@ -98,16 +102,16 @@ class ScreenRecordService : Service() {
                 channel
             )
             Notification.Builder(this, channelId)
-                .setContentTitle("DataRecorder")
-                .setContentText("Your screen is being recorded and saved to your phone.")
+                .setContentTitle(APP_NAME)
+                .setContentText("Your screen is being recorded.")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .setTicker("Tickertext")
                 .build()
         } else {
             Notification.Builder(this)
-                .setContentTitle("DataRecorder")
-                .setContentText("Your screen is being recorded and saved to your phone.")
+                .setContentTitle(APP_NAME)
+                .setContentText("Your screen is being recorded.")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .setTicker("Tickertext")
@@ -230,7 +234,7 @@ class ScreenRecordService : Service() {
 
     override fun onDestroy() {
         stopRecording()
-        Uploader.uploadScreenVideo(arrayListOf(file))
+        uploader.uploadScreenVideo(arrayListOf(file))
         unregisterReceiver(mScreenStateReceiver)
         stopSelf()
     }

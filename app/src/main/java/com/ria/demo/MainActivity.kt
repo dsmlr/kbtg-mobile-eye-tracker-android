@@ -2,6 +2,7 @@ package com.ria.demo
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -34,6 +35,7 @@ import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
     companion object {
+        lateinit var notificationManager: NotificationManager
         var circles = ArrayList<Circle>()
     }
 
@@ -46,6 +48,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        9
         requestForPermission()
         setContentView(R.layout.activity_main)
 

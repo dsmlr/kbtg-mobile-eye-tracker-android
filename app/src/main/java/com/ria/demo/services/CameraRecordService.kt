@@ -27,6 +27,7 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
     private var windowManager: WindowManager? = null
     private var surfaceView: SurfaceView? = null
     private var camera: Camera? = null
+    private lateinit var uploader: Uploader
     private lateinit var file: File
     private lateinit var recordType: String
 
@@ -37,6 +38,8 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
     }
 
     override fun onCreate() {
+        uploader = Uploader(this)
+
         windowManager =
             this.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         surfaceView = SurfaceView(this)
@@ -119,7 +122,7 @@ class CameraRecordService : Service(), SurfaceHolder.Callback {
             windowManager!!.removeView(surfaceView)
         }
 
-        Uploader.uploadFaceVideo(recordType, arrayListOf(file))
+        uploader.uploadFaceVideo(recordType, arrayListOf(file))
 
         stopSelf()
     }
