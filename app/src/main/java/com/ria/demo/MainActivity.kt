@@ -31,6 +31,8 @@ import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.selector.*
 import kotlinx.android.synthetic.main.activity_main.*
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
@@ -56,7 +58,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         mProjectionManager =
             getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
-        AndroidNetworking.initialize(applicationContext)
+        val okHttpClient = OkHttpClient().newBuilder()
+            .connectTimeout(600, TimeUnit.SECONDS)
+            .readTimeout(600, TimeUnit.SECONDS)
+            .writeTimeout(600, TimeUnit.SECONDS)
+            .build()
+
+        AndroidNetworking.initialize(applicationContext, okHttpClient)
         createFotoapparat()
         addButtonEventListener()
         notifyRecordingState()

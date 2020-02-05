@@ -11,7 +11,7 @@ class Constants {
         const val COUNTDOWN_DURATION_IN_MILLIS: Long = 3000
         const val CIRCLE_LIFETIME_IN_MILLIS = 2000
         const val RECORD_TYPE = "recordType"
-        const val SERVER_URL = "http://10.72.1.223:3000"
-//        const val SERVER_URL = "http://35.240.217.44:3000"
+//        const val SERVER_URL = "http://192.168.1.104:3000"
+        const val SERVER_URL = "http://35.240.217.44:3000"
     }
 }
