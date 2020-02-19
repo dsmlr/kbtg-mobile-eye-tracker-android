@@ -95,13 +95,21 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         super.onStart()
 
         if (!isServiceRunning()) {
-            fotoapparat?.start()
+            restartFotoapparat()
         }
     }
 
     override fun onStop() {
         super.onStop()
         fotoapparat?.stop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        if (!isServiceRunning()) {
+            restartFotoapparat()
+        }
     }
 
     override fun onClick(view: View?) {
@@ -246,13 +254,14 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 restartFotoapparat()
                 restoreMainScreen()
 
-                makeToast("Calibrating is complete")
+                makeToast("Calibrating will take approximately 1 minute, please wait until you receive the notification.")
                 Log.d(tag, String.format("Finish Calibration"))
             }
         }.start()
     }
 
     private fun showCountdownTimerScreen() {
+        activity_main_rectangle_frame.visibility = View.GONE
         activity_main_camera_view.visibility = View.GONE
         activity_main_canvas_view.visibility = View.GONE
         activity_main_btn_start_calibration.visibility = View.GONE
@@ -262,6 +271,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun showCanvasView() {
+        activity_main_rectangle_frame.visibility = View.GONE
         activity_main_camera_view.visibility = View.GONE
         activity_main_canvas_view.visibility = View.VISIBLE
         activity_main_btn_start_calibration.visibility = View.GONE
@@ -271,6 +281,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun restoreMainScreen() {
+        activity_main_rectangle_frame.visibility = View.VISIBLE
         activity_main_camera_view.visibility = View.VISIBLE
         activity_main_btn_start_calibration.visibility = View.VISIBLE
         activity_main_btn_start_recording.visibility = View.VISIBLE
@@ -362,6 +373,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         if (isServiceRunning()) {
             fotoapparat?.stop()
 
+            activity_main_rectangle_frame.visibility = View.GONE
             activity_main_camera_view.visibility = View.GONE
             activity_main_is_record.visibility = View.VISIBLE
             activity_main_btn_start_recording.visibility = View.GONE
@@ -370,6 +382,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         } else {
             fotoapparat?.start()
 
+            activity_main_rectangle_frame.visibility = View.VISIBLE
             activity_main_camera_view.visibility = View.VISIBLE
             activity_main_is_record.visibility = View.GONE
             activity_main_btn_start_recording.visibility = View.VISIBLE
