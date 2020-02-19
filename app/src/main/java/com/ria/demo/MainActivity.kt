@@ -137,6 +137,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
                 makeToast("Stop recording")
 
+                restartFotoapparat()
                 notifyRecordingState()
             }
             R.id.activity_main_btn_start_calibration -> {
