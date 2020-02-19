@@ -63,24 +63,36 @@
 
             <Button
                 android:id="@+id/activity_main_btn_start_calibration"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                app:layout_constraintWidth_percent="0.5"
                 android:text="@string/start_calibration_btn"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintWidth_default="percent"
                 app:layout_constraintBottom_toBottomOf="parent" />
 
             <Button
                 android:id="@+id/activity_main_btn_start_recording"
-                android:layout_width="match_parent"
+                app:layout_constraintWidth_percent="0.5"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:text="@string/start_recording_btn"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintWidth_default="percent"
                 app:layout_constraintBottom_toTopOf="@id/activity_main_btn_start_calibration" />
 
             <Button
                 android:id="@+id/activity_main_btn_stop_recording"
-                android:layout_width="match_parent"
+                app:layout_constraintWidth_percent="0.5"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:text="@string/stop_recording_btn"
                 android:visibility="gone"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintWidth_default="percent"
                 app:layout_constraintBottom_toTopOf="@id/activity_main_btn_start_calibration" />
         </androidx.constraintlayout.widget.ConstraintLayout>
     </RelativeLayout>

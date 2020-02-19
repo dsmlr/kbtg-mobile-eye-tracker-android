@@ -21,6 +21,7 @@ import com.ria.demo.services.CameraRecordService
 import com.ria.demo.services.ScreenRecordService
 import com.ria.demo.utilities.Constants
 import com.ria.demo.utilities.Constants.Companion.RECORD_TYPE
+import com.ria.demo.utilities.makeLongToast
 import com.ria.demo.utilities.makeToast
 import io.fotoapparat.Fotoapparat
 import io.fotoapparat.configuration.CameraConfiguration
@@ -254,7 +255,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 restartFotoapparat()
                 restoreMainScreen()
 
-                makeToast("Calibrating will take approximately 1 minute, please wait until you receive the notification.")
+                makeLongToast("Calibrating will take approximately 1 minute.")
+                makeLongToast("Please wait until you receive the notification.")
                 Log.d(tag, String.format("Finish Calibration"))
             }
         }.start()
