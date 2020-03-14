@@ -123,22 +123,10 @@ class Uploader(context: Context) {
             .getAsJSONObject(object : JSONObjectRequestListener {
                 override fun onResponse(response: JSONObject?) {
                     Log.d(TAG, response.toString())
-
-                    val builder = notificationHelper.createNotificationBuilder(
-                        APP_NAME,
-                        "Calibration finished."
-                    )
-                    notificationHelper.makeNotification(builder, NOTIFICATION_ID)
                 }
 
                 override fun onError(anError: ANError?) {
                     Log.d(TAG, anError.toString())
-
-                    val builder = notificationHelper.createNotificationBuilder(
-                        APP_NAME,
-                        "Calibration failed."
-                    )
-                    notificationHelper.makeNotification(builder, NOTIFICATION_ID)
                 }
             })
     }

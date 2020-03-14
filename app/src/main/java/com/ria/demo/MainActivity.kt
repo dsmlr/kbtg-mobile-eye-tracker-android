@@ -256,8 +256,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 restartFotoapparat()
                 restoreMainScreen()
 
-                makeLongToast("Calibrating will take approximately 1 minute.")
-                makeLongToast("Please wait until you receive the notification.")
+                makeLongToast("Calibration process is complete.")
                 Log.d(tag, String.format("Finish Calibration"))
             }
         }.start()
