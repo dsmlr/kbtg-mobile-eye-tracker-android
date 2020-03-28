@@ -10,7 +10,9 @@ import androidx.annotation.Nullable
 import com.ria.demo.models.Circle
 
 class CanvasView(context: Context, @Nullable attrs: AttributeSet) : View(context, attrs) {
-    private val tag = "CanvasView"
+    companion object {
+        private const val TAG = "CanvasView"
+    }
 
     private var x = 0
     private var y = 0

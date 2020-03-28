@@ -15,7 +15,6 @@ import android.os.*
 import android.os.Process.THREAD_PRIORITY_BACKGROUND
 import android.text.format.DateFormat
 import android.util.DisplayMetrics
-import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
 import com.ria.demo.R
@@ -28,21 +27,12 @@ import java.util.*
  * REF: https://github.com/pkrieter/android-background-screen-recorder
  */
 class ScreenRecordService : Service() {
-    private val tag = "ScreenRecordService"
-    private val notificationId = 23
-
-    private var mServiceHandler: ServiceHandler? = null
-    private var mMediaProjection: MediaProjection? = null
-    private var mVirtualDisplay: VirtualDisplay? = null
-    private var mMediaRecorder: MediaRecorder? = null
-    private var resultCode = 0
-    private var data: Intent? = null
-    private var mScreenStateReceiver: BroadcastReceiver? = null
-    private lateinit var uploader: Uploader
-    private lateinit var file: File
-
-    companion object BackgroundScreenRecordService {
-        private const val EXTRA_RESULT_CODE = "resultcode"
+    companion object {
+        private const val TAG = "ScreenRecordService"
+        private const val CHANNEL_ID = "channel_id"
+        private const val CHANNEL_NAME = "channel_name"
+        private const val NOTIFICATION_ID = 23
+        private const val EXTRA_RESULT_CODE = "resultCode"
         private const val EXTRA_DATA = "data"
 
         fun newIntent(context: Context?, resultCode: Int, data: Intent?): Intent? {
@@ -55,7 +45,17 @@ class ScreenRecordService : Service() {
         }
     }
 
-    inner class MyBroadcastReceiver : BroadcastReceiver() {
+    private var mServiceHandler: ServiceHandler? = null
+    private var mMediaProjection: MediaProjection? = null
+    private var mVirtualDisplay: VirtualDisplay? = null
+    private var mMediaRecorder: MediaRecorder? = null
+    private var resultCode = 0
+    private var data: Intent? = null
+    private var mScreenStateReceiver: BroadcastReceiver? = null
+    private lateinit var uploader: Uploader
+    private lateinit var file: File
+
+    private inner class MyBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_ON -> {
@@ -72,53 +72,51 @@ class ScreenRecordService : Service() {
         }
     }
 
-    private inner class ServiceHandler : Handler {
-        constructor(looper: Looper?) : super(looper)
-
+    private inner class ServiceHandler(looper: Looper?) : Handler(looper) {
         override fun handleMessage(msg: Message?) {
             if (resultCode == RESULT_OK) {
                 startRecording(resultCode, data)
-            } else {
             }
         }
     }
 
     override fun onCreate() {
-        Log.d(tag, "onCreate")
-
         uploader = Uploader(this)
 
         val notificationIntent = Intent(this, ScreenRecordService::class.java)
+
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0)
 
-        val notification: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = "channel_id"
-            val channel = NotificationChannel(
-                channelId,
-                "channel_name",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
-                channel
-            )
-            Notification.Builder(this, channelId)
-                .setContentTitle(APP_NAME)
-                .setContentText("Your screen is being recorded.")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentIntent(pendingIntent)
-                .setTicker("Tickertext")
-                .build()
-        } else {
-            Notification.Builder(this)
-                .setContentTitle(APP_NAME)
-                .setContentText("Your screen is being recorded.")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentIntent(pendingIntent)
-                .setTicker("Tickertext")
-                .build()
-        }
+        val notification: Notification =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_DEFAULT
+                )
 
-        startForeground(notificationId, notification)
+                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
+                    channel
+                )
+
+                Notification.Builder(this, CHANNEL_ID)
+                    .setContentTitle(APP_NAME)
+                    .setContentText("Your screen is being recorded.")
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentIntent(pendingIntent)
+                    .setTicker("TickerText")
+                    .build()
+            } else {
+                Notification.Builder(this)
+                    .setContentTitle(APP_NAME)
+                    .setContentText("Your screen is being recorded.")
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentIntent(pendingIntent)
+                    .setTicker("TickerText")
+                    .build()
+            }
+
+        startForeground(NOTIFICATION_ID, notification)
         mScreenStateReceiver = MyBroadcastReceiver()
 
         val screenStateFilter = IntentFilter()
@@ -154,9 +152,18 @@ class ScreenRecordService : Service() {
         return START_REDELIVER_INTENT
     }
 
-    private fun startRecording(resultCode: Int, data: Intent?) {
-        Log.d(tag, "Screen Record Activate")
+    override fun onBind(intent: Intent?): IBinder? {
+        return null
+    }
 
+    override fun onDestroy() {
+        stopRecording()
+        uploader.uploadScreenVideo(arrayListOf(file))
+        unregisterReceiver(mScreenStateReceiver)
+        stopSelf()
+    }
+
+    private fun startRecording(resultCode: Int, data: Intent?) {
         val mProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mMediaRecorder = MediaRecorder()
@@ -176,6 +183,7 @@ class ScreenRecordService : Service() {
         mMediaRecorder!!.setVideoSize(displayWidth, displayHeight)
 
         file = openFileForStorage()!!
+
         mMediaRecorder!!.setOutputFile(file.absolutePath)
 
         try {
@@ -185,7 +193,9 @@ class ScreenRecordService : Service() {
         }
 
         mMediaProjection = mProjectionManager.getMediaProjection(resultCode, data)
+
         val surface: Surface = mMediaRecorder!!.surface
+
         mVirtualDisplay = mMediaProjection!!.createVirtualDisplay(
             "MainActivity",
             displayWidth,
@@ -196,25 +206,19 @@ class ScreenRecordService : Service() {
             null,
             null
         )
-        mMediaRecorder!!.start()
 
-        Log.d(tag, "Started recording")
+        mMediaRecorder!!.start()
     }
 
     private fun openFileForStorage(): File? {
-        val directory: File
-        val storageState = Environment.getExternalStorageState()
+        if (Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED) {
+            val currentDate = DateFormat.format("yyyy-MM-dd_kk-mm-ss", Date().time)
+            val directory =
+                File(Environment.getExternalStoragePublicDirectory(File.separator), "DEMO")
 
-        if (storageState == Environment.MEDIA_MOUNTED) {
-            directory = File(Environment.getExternalStoragePublicDirectory(File.separator), "DEMO")
             return when {
                 !directory.exists() && !directory.mkdirs() -> null
-                else -> File(
-                    directory.path + File.separator + DateFormat.format(
-                        "yyyy-MM-dd_kk-mm-ss",
-                        Date().time
-                    ) + "_screen.mp4"
-                )
+                else -> File(directory.path + File.separator + currentDate + "_screen.mp4")
             }
         }
 
@@ -226,16 +230,5 @@ class ScreenRecordService : Service() {
         mMediaProjection!!.stop()
         mMediaRecorder!!.release()
         mVirtualDisplay!!.release()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
-
-    override fun onDestroy() {
-        stopRecording()
-        uploader.uploadScreenVideo(arrayListOf(file))
-        unregisterReceiver(mScreenStateReceiver)
-        stopSelf()
     }
 }

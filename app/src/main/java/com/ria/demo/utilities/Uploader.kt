@@ -2,7 +2,6 @@ package com.ria.demo.utilities
 
 import android.content.Context
 import android.os.Handler
-import android.util.Log
 import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.common.Priority
 import com.androidnetworking.error.ANError
@@ -12,121 +11,105 @@ import com.ria.demo.models.Circle
 import com.ria.demo.utilities.Constants.Companion.APP_NAME
 import com.ria.demo.utilities.Constants.Companion.NOTIFICATION_ID
 import com.ria.demo.utilities.Constants.Companion.SERVER_URL
+import com.ria.demo.utilities.Constants.Companion.TYPE_CALIBRATION
+import com.ria.demo.utilities.Constants.Companion.TYPE_PREDICTION
 import org.json.JSONObject
 import java.io.File
 
 class Uploader(context: Context) {
     companion object {
-        const val TAG = "Uploader"
+        private const val TAG = "Uploader"
+        private const val SAVE_SCREEN_VIDEO_PATH = "save-screen-video"
+        private const val CHECK_STATUS_PATH = "check-status"
+        private const val PREDICT_PATH = "predict"
+        private const val CALIBRATE_PATH = "calibrate"
+        private const val VIDEO_KEY = "video[]"
+        private const val STATUS_KEY = "status"
+        private const val X_POSITIONS_KEY = "xPositions"
+        private const val Y_POSITIONS_KEY = "yPositions"
     }
 
     val notificationHelper = NotificationHelper(context)
 
     fun uploadFaceVideo(recordType: String, videoList: ArrayList<File>) {
-        if (recordType == "prediction") {
-            uploadPredictionVideo(videoList)
-        } else if (recordType == "calibration") {
-            uploadCalibrateVideo(videoList)
+        if (recordType == TYPE_PREDICTION) {
+            uploadFaceVideoForPrediction(videoList)
+        } else if (recordType == TYPE_CALIBRATION) {
+            uploadFaceVideoForCalibration(videoList)
         }
     }
 
     fun uploadScreenVideo(videoList: ArrayList<File>) {
-        AndroidNetworking.upload("$SERVER_URL/save-screen-video")
-            .addMultipartFileList("video[]", videoList)
+        AndroidNetworking.upload("$SERVER_URL/$SAVE_SCREEN_VIDEO_PATH")
+            .addMultipartFileList(VIDEO_KEY, videoList)
             .setPriority(Priority.HIGH)
             .build()
-            .setUploadProgressListener { bytesUploaded, totalBytes ->
-                Log.d(
-                    TAG,
-                    String.format("Screen Video BytesUploaded: %s / %s", bytesUploaded, totalBytes)
-                )
-            }
             .getAsJSONObject(object : JSONObjectRequestListener {
                 override fun onResponse(response: JSONObject?) {
-                    Log.d(TAG, response.toString())
                 }
 
                 override fun onError(anError: ANError?) {
-                    Log.d(TAG, anError.toString())
                 }
             })
     }
 
-    private fun uploadPredictionVideo(videoList: ArrayList<File>) {
-        AndroidNetworking.get("${SERVER_URL}/check-status")
+    private fun uploadFaceVideoForPrediction(videoList: ArrayList<File>) {
+        AndroidNetworking.get("$SERVER_URL/$CHECK_STATUS_PATH")
             .setPriority(Priority.HIGH)
             .build()
             .getAsJSONObject(object : JSONObjectRequestListener {
                 override fun onResponse(response: JSONObject?) {
-                    Log.d(TAG, response!!["status"].toString())
+                    val calibrationStatus = response!![STATUS_KEY] == "true"
 
-                    if (response!!["status"] == "true") {
-                        AndroidNetworking.upload("$SERVER_URL/predict")
-                            .addMultipartFileList("video[]", videoList)
+                    if (calibrationStatus) {
+                        AndroidNetworking.upload("$SERVER_URL/$PREDICT_PATH")
+                            .addMultipartFileList(VIDEO_KEY, videoList)
                             .setPriority(Priority.HIGH)
                             .build()
-                            .setUploadProgressListener { bytesUploaded, totalBytes ->
-                                Log.d(
-                                    TAG,
-                                    String.format("Prediction Video BytesUploaded: %s / %s", bytesUploaded, totalBytes)
-                                )
-                            }
                             .getAsJSONObject(object : JSONObjectRequestListener {
                                 override fun onResponse(response: JSONObject?) {
-                                    Log.d(TAG, response.toString())
-
                                     val builder = notificationHelper.createNotificationBuilder(
                                         APP_NAME,
                                         "Prediction finished."
                                     )
+
                                     notificationHelper.makeNotification(builder, NOTIFICATION_ID)
                                 }
 
                                 override fun onError(anError: ANError?) {
-                                    Log.d(TAG, anError.toString())
-
                                     val builder = notificationHelper.createNotificationBuilder(
                                         APP_NAME,
                                         "Prediction failed."
                                     )
+
                                     notificationHelper.makeNotification(builder, NOTIFICATION_ID)
                                 }
                             })
                     } else {
-                        Handler().postDelayed({ uploadPredictionVideo(videoList) }, 20000)
-                        Log.d(TAG, "do upload process again")
+                        Handler().postDelayed({ uploadFaceVideoForPrediction(videoList) }, 20000)
                     }
                 }
 
                 override fun onError(anError: ANError?) {
-                    Log.d(TAG, anError.toString())
                 }
             })
     }
 
-    private fun uploadCalibrateVideo(videoList: ArrayList<File>) {
+    private fun uploadFaceVideoForCalibration(videoList: ArrayList<File>) {
         val xPositionsStr = circles.map(Circle::x).joinToString(",")
         val yPositionsStr = circles.map(Circle::y).joinToString(",")
 
-        AndroidNetworking.upload("$SERVER_URL/calibrate")
-            .addMultipartFileList("video[]", videoList)
-            .addMultipartParameter("xPositions", xPositionsStr)
-            .addMultipartParameter("yPositions", yPositionsStr)
+        AndroidNetworking.upload("$SERVER_URL/$CALIBRATE_PATH")
+            .addMultipartFileList(VIDEO_KEY, videoList)
+            .addMultipartParameter(X_POSITIONS_KEY, xPositionsStr)
+            .addMultipartParameter(Y_POSITIONS_KEY, yPositionsStr)
             .setPriority(Priority.HIGH)
             .build()
-            .setUploadProgressListener { bytesUploaded, totalBytes ->
-                Log.d(
-                    TAG,
-                    String.format("Calibration Video BytesUploaded: %s / %s", bytesUploaded, totalBytes)
-                )
-            }
             .getAsJSONObject(object : JSONObjectRequestListener {
                 override fun onResponse(response: JSONObject?) {
-                    Log.d(TAG, response.toString())
                 }
 
                 override fun onError(anError: ANError?) {
-                    Log.d(TAG, anError.toString())
                 }
             })
     }

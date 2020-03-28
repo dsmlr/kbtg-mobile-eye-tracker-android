@@ -10,7 +10,6 @@ import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
-import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -21,6 +20,8 @@ import com.ria.demo.services.CameraRecordService
 import com.ria.demo.services.ScreenRecordService
 import com.ria.demo.utilities.Constants
 import com.ria.demo.utilities.Constants.Companion.RECORD_TYPE
+import com.ria.demo.utilities.Constants.Companion.TYPE_CALIBRATION
+import com.ria.demo.utilities.Constants.Companion.TYPE_PREDICTION
 import com.ria.demo.utilities.makeLongToast
 import com.ria.demo.utilities.makeToast
 import io.fotoapparat.Fotoapparat
@@ -38,11 +39,12 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
     companion object {
-        lateinit var notificationManager: NotificationManager
+        private const val TAG = "MainActivity"
+
         var circles = ArrayList<Circle>()
+        lateinit var notificationManager: NotificationManager
     }
 
-    private val tag = "MainActivity"
     private val permissionCode = 1
     private val apiVersion = android.os.Build.VERSION.SDK_INT
     private var fotoapparat: Fotoapparat? = null
@@ -51,20 +53,18 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        9
-        requestForPermission()
-        setContentView(R.layout.activity_main)
-
-        mProjectionManager =
-            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-
         val okHttpClient = OkHttpClient().newBuilder()
             .connectTimeout(600, TimeUnit.SECONDS)
             .readTimeout(600, TimeUnit.SECONDS)
             .writeTimeout(600, TimeUnit.SECONDS)
             .build()
 
+        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        mProjectionManager =
+            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+
+        requestForPermission()
+        setContentView(R.layout.activity_main)
         AndroidNetworking.initialize(applicationContext, okHttpClient)
         createFotoapparat()
         addButtonEventListener()
@@ -75,15 +75,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode != permissionCode) {
-            Log.e(tag, "Unknown request code: $requestCode")
-
             return
         }
 
         if (resultCode == RESULT_OK) {
-            Log.d(tag, "onActivityResult: Request code = $requestCode")
-            Log.d(tag, "onActivityResult: Result code = $resultCode")
-
             startBackgroundScreenRecordService(resultCode, data)
         } else {
             makeToast("Screen Cast Permission Denied")
@@ -95,20 +90,21 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     override fun onStart() {
         super.onStart()
 
-        if (!isServiceRunning()) {
+        if (!isServiceStillRunning()) {
             restartFotoapparat()
         }
     }
 
     override fun onStop() {
         super.onStop()
+
         fotoapparat?.stop()
     }
 
     override fun onResume() {
         super.onResume()
 
-        if (!isServiceRunning()) {
+        if (!isServiceStillRunning()) {
             restartFotoapparat()
         }
     }
@@ -117,35 +113,32 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         when (view?.id) {
             R.id.activity_main_btn_start_recording -> {
                 val cameraRecordService = Intent(this, CameraRecordService::class.java)
-                cameraRecordService.putExtra(RECORD_TYPE, "prediction")
 
+                cameraRecordService.putExtra(RECORD_TYPE, TYPE_PREDICTION)
                 startActivityForResult(
                     mProjectionManager!!.createScreenCaptureIntent(),
                     permissionCode
                 )
                 startService(cameraRecordService)
+                notifyRecordingState()
 
                 makeToast("Start recording")
-
-                notifyRecordingState()
             }
             R.id.activity_main_btn_stop_recording -> {
                 val cameraRecordService = Intent(this, CameraRecordService::class.java)
 
                 stopBackgroundScreenRecordService()
                 stopService(cameraRecordService)
-
-                makeToast("Stop recording")
-
                 restartFotoapparat()
                 notifyRecordingState()
+
+                makeToast("Stop recording")
             }
             R.id.activity_main_btn_start_calibration -> {
                 val cameraRecordService = Intent(this, CameraRecordService::class.java)
-                cameraRecordService.putExtra(RECORD_TYPE, "calibration")
-                Log.d(tag, "Before start service timestamp: ${System.currentTimeMillis()}")
+
+                cameraRecordService.putExtra(RECORD_TYPE, TYPE_CALIBRATION)
                 startService(cameraRecordService)
-                Log.d(tag, "After start service timestamp: ${System.currentTimeMillis()}")
                 startCalibration()
             }
         }
@@ -159,7 +152,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     private fun startCalibration() {
         showCountdownTimerScreen()
-        activity_main_countdown_timer.text = "Ready"
+        activity_main_countdown_timer.text = getString(R.string.text_ready)
 
         object : CountDownTimer(Constants.COUNTDOWN_DURATION_IN_MILLIS, 1000) {
             override fun onTick(millisUntilFinished: Long) {
@@ -204,34 +197,19 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private fun drawCircles() {
         showCanvasView()
 
-        Log.d(tag, String.format("Start Calibration"))
-
-        // Draw circle one by one
         circles.forEachIndexed { i, circle ->
             Handler().postDelayed({
-                Log.d(
-                    tag,
-                    String.format(
-                        "Circle No.%s, Timestamp: %s, X: %s, Y: %s",
-                        i + 1,
-                        System.currentTimeMillis(),
-                        circle.x,
-                        circle.y
-                    )
-                )
-
                 activity_main_canvas_view.drawCircle(circle)
             }, (Constants.CIRCLE_LIFETIME_IN_MILLIS * i).toLong())
         }
 
-        // Countdown timer to hide canvas view
         val recordDuration: Long = (circles.size * Constants.CIRCLE_LIFETIME_IN_MILLIS).toLong()
-        createFirstTimer(recordDuration)
 
-        // Countdown timer to wait an async task done and show main screen
+        createFirstTimer(recordDuration)
         createSecondTimer(recordDuration)
     }
 
+    // First countdown timer for hiding canvas view after the process of showing circles is finish
     private fun createFirstTimer(recordDuration: Long) {
         object : CountDownTimer(recordDuration, 1000) {
             override fun onTick(millisUntilFinished: Long) {
@@ -244,6 +222,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }.start()
     }
 
+    // Second countdown timer for stopping the camera service and restore the main screen
+    // after 2 seconds of ending the process of showing circles
     private fun createSecondTimer(recordDuration: Long) {
         val cameraRecordService = Intent(this, CameraRecordService::class.java)
 
@@ -257,7 +237,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 restoreMainScreen()
 
                 makeLongToast("Calibration process is complete.")
-                Log.d(tag, String.format("Finish Calibration"))
             }
         }.start()
     }
@@ -313,7 +292,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             ),
             jpegQuality = manualJpegQuality(90),
             sensorSensitivity = lowestSensorSensitivity(),
-            frameProcessor = { frame -> }
+            frameProcessor = { }
         )
 
         fotoapparat = Fotoapparat(
@@ -326,7 +305,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 logcat(),
                 fileLogger(this)
             ),
-            cameraErrorCallback = { error -> Log.d(tag, error.message) }
+            cameraErrorCallback = { }
         )
     }
 
@@ -339,40 +318,29 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
         )
-        val granted = PackageManager.PERMISSION_GRANTED
 
         if (apiVersion >= android.os.Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.INTERNET
-                ) != granted || ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.CAMERA
-                ) != granted
-                || ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.SYSTEM_ALERT_WINDOW
-                ) != granted
-                || ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.RECORD_AUDIO
-                ) != granted
-                || ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                ) != granted
-                || ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                ) != granted
+            if (isPermissionNotGranted(Manifest.permission.INTERNET) ||
+                isPermissionNotGranted(Manifest.permission.CAMERA) ||
+                isPermissionNotGranted(Manifest.permission.SYSTEM_ALERT_WINDOW) ||
+                isPermissionNotGranted(Manifest.permission.RECORD_AUDIO) ||
+                isPermissionNotGranted(Manifest.permission.READ_EXTERNAL_STORAGE) ||
+                isPermissionNotGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             ) {
                 ActivityCompat.requestPermissions(this, permissions, 2)
             }
         }
     }
 
+    private fun isPermissionNotGranted(permission: String): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            permission
+        ) != PackageManager.PERMISSION_GRANTED
+    }
+
     private fun notifyRecordingState() {
-        if (isServiceRunning()) {
+        if (isServiceStillRunning()) {
             fotoapparat?.stop()
 
             activity_main_rectangle_frame.visibility = View.GONE
@@ -405,7 +373,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         stopService(intent)
     }
 
-    private fun isServiceRunning(): Boolean {
+    private fun isServiceStillRunning(): Boolean {
         val manager =
             getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
